@@ -12,24 +12,26 @@
 #================================================================
 
 import tensorflow as tf
+import time
 from core import utils, yolov3
 from core.dataset import dataset, Parser
 sess = tf.Session()
 
 IMAGE_H, IMAGE_W = 416, 416
-BATCH_SIZE       = 8
-EPOCHS           = 2500
+BATCH_SIZE       = 4
+#EPOCHS           = 2500
+EPOCHS           = 100000
 LR               = 0.001 # if Nan, set 0.0005, 0.0001
 DECAY_STEPS      = 100
 DECAY_RATE       = 0.9
-SHUFFLE_SIZE     = 200
-CLASSES          = utils.read_coco_names('./data/raccoon.names')
-ANCHORS          = utils.get_anchors('./data/raccoon_anchors.txt', IMAGE_H, IMAGE_W)
+SHUFFLE_SIZE     = 100
+CLASSES          = utils.read_coco_names('./data/coco.names')
+ANCHORS          = utils.get_anchors('./data/coco_anchors.txt', IMAGE_H, IMAGE_W)
 NUM_CLASSES      = len(CLASSES)
 EVAL_INTERNAL    = 100
 
-train_tfrecord   = "./raccoon_dataset/raccoon_train.tfrecords"
-test_tfrecord    = "./raccoon_dataset/raccoon_test.tfrecords"
+train_tfrecord   = "/mnt/coco/tfrecord_slim/train.tfrecords"
+test_tfrecord    = "/mnt/coco/tfrecord_slim/val.tfrecords"
 
 parser   = Parser(IMAGE_H, IMAGE_W, ANCHORS, NUM_CLASSES)
 trainset = dataset(parser, train_tfrecord, BATCH_SIZE, shuffle=SHUFFLE_SIZE)
@@ -38,7 +40,10 @@ testset  = dataset(parser, test_tfrecord , BATCH_SIZE, shuffle=None)
 is_training = tf.placeholder(tf.bool)
 example = tf.cond(is_training, lambda: trainset.get_next(), lambda: testset.get_next())
 
-images, *y_true = example
+images, y_true_13, y_true_26, y_true_52 = example
+
+y_true = [y_true_13, y_true_26, y_true_52]
+
 model = yolov3.yolov3(NUM_CLASSES, ANCHORS)
 
 with tf.variable_scope('yolov3'):
@@ -65,14 +70,13 @@ optimizer = tf.train.AdamOptimizer(learning_rate)
 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 with tf.control_dependencies(update_ops):
     train_op = optimizer.minimize(loss[0], var_list=update_vars, global_step=global_step)
-
 sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
 saver_to_restore.restore(sess, "./checkpoint/yolov3.ckpt")
 saver = tf.train.Saver(max_to_keep=2)
-
+start=time.time()
 for epoch in range(EPOCHS):
     run_items = sess.run([train_op, write_op, y_pred, y_true] + loss, feed_dict={is_training:True})
-
+    
     if (epoch+1) % EVAL_INTERNAL == 0:
         train_rec_value, train_prec_value = utils.evaluate(run_items[2], run_items[3])
 
@@ -84,6 +88,7 @@ for epoch in range(EPOCHS):
         %(epoch+1, run_items[5], run_items[6], run_items[7], run_items[8]))
 
     run_items = sess.run([write_op, y_pred, y_true] + loss, feed_dict={is_training:False})
+
     if (epoch+1) % EVAL_INTERNAL == 0:
         test_rec_value, test_prec_value = utils.evaluate(run_items[1], run_items[2])
         print("\n=======================> evaluation result <================================\n")
@@ -93,4 +98,6 @@ for epoch in range(EPOCHS):
 
     writer_test.add_summary(run_items[0], global_step=epoch)
     writer_test.flush() # Flushes the event file to disk
+
+print("Running time: "+str(time.time()-start))
 

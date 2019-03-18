@@ -27,7 +27,7 @@ def main(argv):
 
     dataset = defaultdict(list)
     with open(os.path.realpath(flags.dataset_info_path), 'w') as f:
-        labels = json.load(open(flags.json_path, encoding='utf-8'))
+        labels = json.load(open(flags.json_path))
         annotations = labels['annotations']
 
         for annotation in annotations:
