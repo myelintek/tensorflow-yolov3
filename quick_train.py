@@ -18,9 +18,8 @@ from core.dataset import dataset, Parser
 sess = tf.Session()
 
 IMAGE_H, IMAGE_W = 416, 416
-BATCH_SIZE       = 4
-#EPOCHS           = 2500
-EPOCHS           = 100000
+BATCH_SIZE       = 8
+STEPS            = 2500
 LR               = 0.001 # if Nan, set 0.0005, 0.0001
 DECAY_STEPS      = 100
 DECAY_RATE       = 0.9
@@ -29,6 +28,7 @@ CLASSES          = utils.read_coco_names('./data/coco.names')
 ANCHORS          = utils.get_anchors('./data/coco_anchors.txt', IMAGE_H, IMAGE_W)
 NUM_CLASSES      = len(CLASSES)
 EVAL_INTERNAL    = 100
+SAVE_INTERNAL    = 500
 
 train_tfrecord   = "/mnt/coco/tfrecord_slim/train.tfrecords"
 test_tfrecord    = "/mnt/coco/tfrecord_slim/val.tfrecords"
@@ -74,29 +74,28 @@ sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
 saver_to_restore.restore(sess, "./checkpoint/yolov3.ckpt")
 saver = tf.train.Saver(max_to_keep=2)
 start=time.time()
-for epoch in range(EPOCHS):
+for step in range(STEPS):
     run_items = sess.run([train_op, write_op, y_pred, y_true] + loss, feed_dict={is_training:True})
-    
-    if (epoch+1) % EVAL_INTERNAL == 0:
+
+    if (step+1) % EVAL_INTERNAL == 0:
         train_rec_value, train_prec_value = utils.evaluate(run_items[2], run_items[3])
 
-    writer_train.add_summary(run_items[1], global_step=epoch)
+    writer_train.add_summary(run_items[1], global_step=step)
     writer_train.flush() # Flushes the event file to disk
-    if (epoch+1) % 500 == 0: saver.save(sess, save_path="./checkpoint/yolov3.ckpt", global_step=epoch+1)
+    if (step+1) % SAVE_INTERNAL == 0: saver.save(sess, save_path="./checkpoint/yolov3.ckpt", global_step=step+1)
 
-    print("=> EPOCH %10d [TRAIN]:\tloss_xy:%7.4f \tloss_wh:%7.4f \tloss_conf:%7.4f \tloss_class:%7.4f"
-        %(epoch+1, run_items[5], run_items[6], run_items[7], run_items[8]))
+    print("=> STEP %10d [TRAIN]:\tloss_xy:%7.4f \tloss_wh:%7.4f \tloss_conf:%7.4f \tloss_class:%7.4f"
+        %(step+1, run_items[5], run_items[6], run_items[7], run_items[8]))
 
     run_items = sess.run([write_op, y_pred, y_true] + loss, feed_dict={is_training:False})
-
-    if (epoch+1) % EVAL_INTERNAL == 0:
+    if (step+1) % EVAL_INTERNAL == 0:
         test_rec_value, test_prec_value = utils.evaluate(run_items[1], run_items[2])
         print("\n=======================> evaluation result <================================\n")
-        print("=> EPOCH %10d [TRAIN]:\trecall:%7.4f \tprecision:%7.4f" %(epoch+1, train_rec_value, train_prec_value))
-        print("=> EPOCH %10d [VALID]:\trecall:%7.4f \tprecision:%7.4f" %(epoch+1, test_rec_value,  test_prec_value))
+        print("=> STEP %10d [TRAIN]:\trecall:%7.4f \tprecision:%7.4f" %(step+1, train_rec_value, train_prec_value))
+        print("=> STEP %10d [VALID]:\trecall:%7.4f \tprecision:%7.4f" %(step+1, test_rec_value,  test_prec_value))
         print("\n=======================> evaluation result <================================\n")
 
-    writer_test.add_summary(run_items[0], global_step=epoch)
+    writer_test.add_summary(run_items[0], global_step=step)
     writer_test.flush() # Flushes the event file to disk
 
 print("Running time: "+str(time.time()-start))
