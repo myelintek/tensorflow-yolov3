@@ -12,7 +12,7 @@
 #================================================================
 
 import tensorflow as tf
-from core import common
+from . import common
 slim = tf.contrib.slim
 
 class darknet53(object):

@@ -13,7 +13,7 @@
 
 import cv2
 import numpy as np
-from core import utils
+from . import utils
 import tensorflow as tf
 
 class Parser(object):
